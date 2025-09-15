@@ -1,0 +1,19 @@
+Import-Module ActiveDirectory
+
+# Replace with your gMSA name
+$gmsa = "DDOGRW_SVC$"
+
+# Retrieve the msDS-ManagedPassword blob
+$msDSManagedPassword = (Get-ADServiceAccount -Identity $gmsa -Properties msDS-ManagedPassword).'msDS-ManagedPassword'
+
+# Convert to .NET object
+$pwdBlob = [System.DirectoryServices.ActiveDirectory.DomainController]::DecryptManagedPassword($msDSManagedPassword)
+
+# Extract credential
+$user = $pwdBlob.UserName
+$pass = $pwdBlob.SecureCurrentPassword
+
+# Output in cleartext
+$netcred = $pass.GetNetworkCredential()
+Write-Host "`nâœ… gMSA: $user"
+Write-Host "ðŸ”‘ Password: $($netcred.Password)"
